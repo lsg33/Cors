@@ -173,6 +173,7 @@ app.post('/removeFriend', async (req, res) => {
         if (user.friendList.includes(friendId)) {
             user.friendList = user.friendList.filter(id => id !== friendId); // Remove the friendId
             await user.save();
+            console.log('Updated friend list:', user.friendList);
             console.log('Request received! Now removing id');
         }
 
