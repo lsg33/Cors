@@ -17,10 +17,14 @@ const userSchema = new mongoose.Schema({
   tagratio: Number,
   image: String,
   online: Boolean,
-    friendList: [{
-        type: mongoose.Schema.Types.ObjectId,
-    }]
+  friendList: [{
+    type: mongoose.Schema.Types.ObjectId,
+  }],
+  blockedList: [{
+    type: mongoose.Schema.Types.ObjectId, // Stores blocked users' IDs
+  }],
 });
+
 
 const productSchema = new mongoose.Schema({
     name: String,
@@ -141,6 +145,66 @@ app.get('/users', async (req, res) => {
     }
 });
 
+app.post('/block', async (req, res) => {
+  const { userId, blockId } = req.body;
+  console.log('Request received for blocking:', blockId, userId);
+
+  try {
+    // Find the user and the user to be blocked
+    let user = await User.findById(userId);
+    let blockUser = await User.findById(blockId);
+
+    // Check if both users exist
+    if (!user || !blockUser) {
+      return res.status(404).json({ message: 'User or Blocked User not found' });
+    }
+
+    // Check if the user has already blocked the other user
+    if (!user.blockedList.includes(blockId)) {
+      user.blockedList.push(blockId);
+      await user.save();
+      console.log('User blocked successfully');
+    }
+
+    // Optionally: You can also remove the blocked user from the friend list if they were friends
+    user.friendList = user.friendList.filter(id => id.toString() !== blockId.toString());
+    await user.save();
+
+    res.status(200).json({ message: 'User blocked successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error blocking user', error });
+    console.log('Error blocking user:', error);
+  }
+});
+
+app.post('/unblock', async (req, res) => {
+  const { userId, blockId } = req.body;
+  console.log('Request received for unblocking:', blockId, userId);
+
+  try {
+    // Find the user and the user to be unblocked
+    let user = await User.findById(userId);
+
+    // Check if both users exist
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if the user has blocked the other user
+    if (user.blockedList.includes(blockId)) {
+      user.blockedList = user.blockedList.filter(id => id.toString() !== blockId.toString());
+      await user.save();
+      console.log('User unblocked successfully');
+    }
+
+    res.status(200).json({ message: 'User unblocked successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error unblocking user', error });
+    console.log('Error unblocking user:', error);
+  }
+});
+
+
 
 
 app.post('/addFriend', async (req, res) => {
@@ -194,30 +258,37 @@ app.post('/removeFriend', async (req, res) => {
 
 
 app.get('/checkFriend', async (req, res) => {
-    const { username, friendUsername } = req.query; 
-    console.log('Request received for checking friend:', username, friendUsername);
+  const { username, friendUsername } = req.query; 
+  console.log('Request received for checking friend:', username, friendUsername);
 
-    try {
-        const user = await User.findOne({ username }).populate('friendList'); 
-        if (!user) return res.status(404).json({ message: 'User not found' });
-        
-        const friend = await User.findOne({ username: friendUsername });
-           if (!friend) return res.status(404).json({ message: 'Friend not found' });
+  try {
+    // Find the user and friend in the database
+    const user = await User.findOne({ username }).populate('friendList blockedList');
+    const friend = await User.findOne({ username: friendUsername });
 
-        const isFriend = user.friendList.some(f => f.equals(friend._id));
+    // Check if the users exist
+    if (!user || !friend) return res.status(404).json({ message: 'User or Friend not found' });
 
-        if (isFriend) {
-            res.status(200).json({ message: 'Friend exists in list', isFriend: true });
-            console.log('Friend exists in list', username, friendUsername);
-        } else {
-            res.status(200).json({ message: 'Friend not in list', isFriend: false });
-            console.log('Friend not in list', username, + friendUsername);
-        }
-    } catch (error) {
-        console.error('Friend check error', error); 
-        res.status(500).json({ message: 'Error checking friend', error });
+    // Check if the user has blocked the friend or vice versa
+    if (user.blockedList.includes(friend._id) || friend.blockedList.includes(user._id)) {
+      return res.status(403).json({ message: 'User is blocked, redirecting...', redirectTo: '/' });
     }
+
+    const isFriend = user.friendList.some(f => f.equals(friend._id));
+
+    if (isFriend) {
+      res.status(200).json({ message: 'Friend exists in list', isFriend: true });
+      console.log('Friend exists in list', username, friendUsername);
+    } else {
+      res.status(200).json({ message: 'Friend not in list', isFriend: false });
+      console.log('Friend not in list', username, friendUsername);
+    }
+  } catch (error) {
+    console.error('Friend check error', error); 
+    res.status(500).json({ message: 'Error checking friend', error });
+  }
 });
+
 
 app.post('/updateProfilePic', async (req, res) => {
     const { username, image, newUsername } = req.body;
