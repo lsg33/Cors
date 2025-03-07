@@ -163,6 +163,26 @@ app.post('/addFriend', async (req, res) => {
     }
 });
 
+app.post('/removeFriend', async (req, res) => {
+    const { userId, friendId } = req.body;
+    console.log('Request received for removing friend:', friendId, userId);
+
+    try {
+        let user = await User.findById(userId);
+
+        if (user.friendList.includes(friendId)) {
+            user.friendList = user.friendList.filter(id => id !== friendId); // Remove the friendId
+            await user.save();
+            console.log('Request received! Now removing id');
+        }
+
+        res.status(200).json({ message: 'User removed successfully!' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error removing friend', error });
+    }
+});
+
+
 app.get('/checkFriend', async (req, res) => {
     const { username, friendUsername } = req.query; 
     console.log('Request received for checking friend:', username, friendUsername);
